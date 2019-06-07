@@ -99,9 +99,6 @@ def analyse(dfhits, SL):
     # Selecting only physical channels of this layer
     sel = dfhits['TDC_CHANNEL_NORM'] <= NCHANNELS
 
-    if args.occupancy:
-        return (SL, dfhits)
-
     events = dfhits[sel].groupby('EVENT_NR')
     # # Excluding groups that have multiple time measurements with the same channel
     # # They strongly degrade performance of meantimer
@@ -800,8 +797,6 @@ def process(input_files):
     file = os.path.splitext(parts[-1])[0]
     if args.events:
         file += '_e'+'_'.join(['{0:d}'.format(ev) for ev in args.events])
-    if args.occupancy:
-        file = 'occupancy_'+file
     if args.update_tzero:
         file += '_t0'
     if args.suffix:
