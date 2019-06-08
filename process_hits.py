@@ -507,11 +507,11 @@ def read_data(input_files, runnum):
 
     if VERBOSE:
         print('')
-        print('dataframe size                   :', allhits['HEAD'].count())
+        print('dataframe size                   :', len(allhits))
         print('')
 
     if VERBOSE:
-        print('dataframe size (no trigger hits) :', allhits['HEAD'].count())
+        print('dataframe size (no trigger hits) :', len(allhits))
         print('')
         print('min values in dataframe')
         print(allhits[['TDC_CHANNEL','TDC_CHANNEL_NORM','TDC_MEAS','BX_COUNTER','ORBIT_CNT']].min())
