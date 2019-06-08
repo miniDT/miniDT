@@ -1,5 +1,8 @@
 *.pyc
+.Python
 __pycache__
-lib/
-lib64/
-bin/
+lib
+lib64
+bin
+include
+pip-selfcheck.json
