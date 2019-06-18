@@ -12,7 +12,7 @@ import operator
 
 # Importing custom code snippets
 from modules.analysis.patterns import PATTERNS, PATTERN_NAMES, ACCEPTANCE_CHANNELS, MEAN_TZERO_DIFF, meantimereq, mean_tzero, tzero_clusters
-from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, CHANNEL_TRIGGER, EVENT_NR_CHANNELS
+from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, EVENT_NR_CHANNELS
 from modules.analysis.config import EVENT_TIME_GAP, TIME_OFFSET, TIME_OFFSET_SL, TIME_WINDOW, DURATION, TRIGGER_TIME_ARRAY
 from modules.analysis.config import NHITS_SL, MEANTIMER_ANGLES, MEANTIMER_CLUSTER_SIZE, MEANTIMER_SL_MULT_MIN
 from modules.analysis.utils import print_progress, mem
@@ -27,7 +27,7 @@ parser.add_argument('-a', '--accepted',  help='Save only events that passed acce
 parser.add_argument('-c', '--csv',  help='Print final selected hits into CSV files', action='store_true', default=False)
 parser.add_argument('--chambers',  help='Minimum number of chambers with 1+ hits', action='store', default=4, type=int)
 parser.add_argument('-d', '--double_hits',  help='Accept only events with 2+ hits in a cell', action='store_true', default=False)
-parser.add_argument('-e', '--event',  help='Split hits in events based on event number', action='store_true', default=False)
+parser.add_argument('-e', '--event',  help='Split hits in events based on external trigger', action='store_true', default=False)
 parser.add_argument('-E', '--events', metavar='N',  help='Only process events with specified numbers', type=int, default=None, nargs='+')
 parser.add_argument('-g', '--group', metavar='N', type=int, help='Process input files sequentially in groups of N', action='store', default=999999)
 parser.add_argument('-l', '--layer',   action='store', default=None, dest='layer',   type=int, help='Layer to process [default: process all 4 layers]')
@@ -146,28 +146,22 @@ def analyse(dfhits, SL):
     return (SL, dfhits, df, meantimer_info)
 
 
-def event_nr(numbers):
-    return (numbers.iloc[0] << 12) | (numbers.iloc[1] << 8) | (numbers.iloc[2] << 4) | (numbers.iloc[3])
-
-
 def calc_event_numbers(allhits, runnum):
     """Calculates event number for groups of hits based on trigger hits"""
     # Creating a dataframe to be filled with hits from found events (for better performance)
     hits = allhits.loc[:1, ['EVENT_NR', 'TIME0']]
     # Selecting only hits containing information about the event number or trigger signals
-    channels = EVENT_NR_CHANNELS + CHANNELS_TRIGGER
+    channels = CHANNELS_TRIGGER
     sel = pd.Series(False, allhits.index)
     for ch in channels:
         sel = sel | ((allhits['FPGA'] == ch[0]) & (allhits['TDC_CHANNEL'] == ch[1]))
     # Selecting hits that have to be grouped by time
     ev_hits = allhits.loc[sel]
     print('### Grouping hits by their time of arrival')
-    # Creating the list of hits with 1 on jump in time
+    # Creating the list of hits with 1 on jump in BX
     evt_group = (ev_hits['ORBIT_CNT'].astype(np.uint64)*DURATION['orbit:bx'] + ev_hits['BX_COUNTER']).sort_values().diff().fillna(0).astype(np.uint64)
     evt_group[evt_group <= EVENT_TIME_GAP] = 0
     evt_group[evt_group > EVENT_TIME_GAP] = 1
-    # evt_group = ev_hits['ORBIT_CNT'].diff().fillna(0).abs().astype(int)
-    # evt_group[evt_group > 0] = 1
     # Calculating cumulative sum to create group ids
     evt_group = evt_group.cumsum()
     # Adding column to be used for grouping hits with event number and trigger
@@ -180,12 +174,10 @@ def calc_event_numbers(allhits, runnum):
     evt_groups = ev_hits.groupby('evt_group')
     n_groups = len(evt_groups)
     n_groups_done = 0
-    last_evt_id = -1
     # Creating a dataframe with 1 row per event
     df_events = pd.DataFrame(data={'EVENT_ID': list(evt_groups.groups.keys())})
     df_events['TIME0'] = -1
     df_events['EVENT_NR'] = -1
-    df_events['TRG_BITS'] = -1
     df_events['TIMEDIFF_TRG_20'] = -1e9
     df_events['TIMEDIFF_TRG_21'] = -1e9
     df_events.set_index('EVENT_ID', inplace=True)
@@ -205,45 +197,19 @@ def calc_event_numbers(allhits, runnum):
             df = df[~df.index.duplicated(keep='first')]
             vals_int = df['TDC_MEAS'].reindex(EVENT_NR_CHANNELS, fill_value=0)
 
-        evt_id = event_nr(vals_int)
+        evt_id = grp
         # Skipping if only one specific event should be processed
         if args.events and evt_id not in args.events:
             continue
 
-        # Check whether trigger signal is present
-        if CHANNEL_TRIGGER not in df.index:
-            print('WARNING: No trigger channel {0}'.format(CHANNEL_TRIGGER))
-            print('         Event skipped')
-            # Storing information about available trigger signals
-            df_trg = df['TDC_MEAS'].reindex(CHANNELS_TRIGGER, fill_value=-111)
-            # Packing bits into 8bit integer and shifting by 5 positions to the right
-            trg_bits = np.packbits(df_trg != -111) >> 5
-            df_events.loc[grp, ['EVENT_NR', 'TRG_BITS']] = (evt_id, trg_bits)
-            if VERBOSE:
-              print(allhits.loc[allhits["ORBIT_CNT"].isin(range(orbit_event-10,orbit_event+10))].loc[allhits["TDC_CHANNEL"].isin(channels)])
-            continue
+        df_events.loc[grp, 'EVENT_NR'] = evt_id
 
         # Getting time and orbit number of the event after duplicates were eliminated
-        time_event, orbit_event = df.loc[CHANNEL_TRIGGER, ('TIME_ABS', 'ORBIT_CNT')]
-        # check for events with ID less than previous one
-        if evt_id <= last_evt_id:
-          print('WARNING: Backward-jump in event number (current={0}, last={1})'.format(evt_id, last_evt_id))
-          print('         Event skipped')
-          if VERBOSE:
-            print(allhits.loc[allhits["ORBIT_CNT"].isin(range(orbit_event-10,orbit_event+10))].loc[allhits["TDC_CHANNEL"].isin(channels)])
-          continue
-        
-        # check for events with way larger ID than previous one
-        if not args.events and last_evt_id > 0 and (evt_id - last_evt_id) > 20:
-          print('WARNING: Large forward-jump in event number (current={0}, last={1})'.format(evt_id, last_evt_id))
-          print('         Retaining current and removing previous event')
-          # allhits.drop(allhits[allhits['EVENT_NR'] == last_evt_id].index, inplace=True)
-          allhits.loc[allhits['EVENT_NR'] == last_evt_id, 'EVENT_NR'] = -1
-          if VERBOSE:
-            print(allhits.loc[allhits["ORBIT_CNT"].isin(range(orbit_event-10,orbit_event+10))].loc[allhits["TDC_CHANNEL"].isin(channels)])
-          # don't 'continue' as this indicates only an issue when opening a new file (first event ID of a file being a result of a backward-jump)
-        # Storing ID of the last event to detect jumps in EVENT_NR
-        last_evt_id = evt_id
+        time_event, orbit_event = None, None
+        for ch in CHANNELS_TRIGGER:
+            if ch in df.index:
+                time_event, orbit_event = df.loc[ch, ('TIME_ABS', 'ORBIT_CNT')]
+                break
 
         # Looking for other hits within the time window of the event, taking into account latency
         # set ttrig based on run number (HARDCODED)
@@ -262,17 +228,7 @@ def calc_event_numbers(allhits, runnum):
         except Exception as e:
             print('WARNING: Exception when calculating window')
 
-        # Calculating time of arrival of the different trigger signals
-        df_trg = df['TIME_ABS'].reindex(CHANNELS_TRIGGER, fill_value=-111)
-        times_trg = df_trg.values
-        # Packing bits into 8bit integer and shifting by 5 positions to the right
-        trg_bits = np.packbits(df_trg != -111) >> 5
-        df_events.loc[grp, ['TIMEDIFF_TRG_20', 'TIMEDIFF_TRG_21', 'TRG_BITS', 'EVENT_NR', 'TIME0']] = (
-            times_trg[2] - times_trg[0], times_trg[2] - times_trg[1], trg_bits, evt_id, tzero)
-        # start = clock()
-        # res = allhits[window | (allhits['evt_group'] == grp)]
-        # print('event: {0:d}  duration: {1:.3f}'.format(evt_id, clock() - start))
-        # continue
+        df_events.loc[grp, ['EVENT_NR', 'TIME0']] = (evt_id, tzero)
 
         # Storing hits of the event with corresponding event number and t0
         idx = allhits.index[window | (allhits['evt_group'] == grp)]
@@ -348,13 +304,16 @@ def save_root(dfs, df_events, output_path):
     # Concatenating dataframe from different SLs
     df_all = pd.concat(dfs)
     # Selecting only physical or trigger hits [for writing empty events as well]
-    df_all = df_all[(df_all['TIME0'] > 0) | ((df_all['FPGA'] == CHANNEL_TRIGGER[0]) & (df_all['TDC_CHANNEL'] == CHANNEL_TRIGGER[1]))]
+    sel = df_all['TIME0'] > 0
+    for ch in CHANNELS_TRIGGER:
+        sel = sel | ((df_all['FPGA'] == ch[0]) & (df_all['TDC_CHANNEL'] == ch[1]))
+    df_all = df_all[sel]
     events = df_all.groupby('EVENT_NR')
     layers = range(4)
     print('### Writing {0:d} hits in {1:d} events to file: {2:s}'.format(df_all.shape[0], len(events), output_path))
     with open(output_path, 'w') as outfile:
         for event, df in events:
-            ch_sel = (df['TDC_CHANNEL'] != CHANNEL_TRIGGER[1])
+            ch_sel = (df['TIME0'] > 0)
             n_layer_hits = df.loc[ch_sel].sort_values('SL').groupby('SL').size().reindex(layers).fillna(0).astype(int).tolist()
             nhits = df.loc[ch_sel].shape[0]
             # if nhits < 3:
@@ -401,8 +360,6 @@ def read_data(input_files, runnum):
     print('### Read {0:d} hits from {1:d} input files'.format(allhits.shape[0], len(hits)))
     # retain all words with HEAD=1
     allhits.drop(allhits.index[allhits['HEAD'] != 1], inplace=True)
-    # Removing hits with TDC_CHANNEL 139
-    allhits.drop(allhits.index[allhits['TDC_CHANNEL'] == 139], inplace=True)
     # Removing unused columns to save memory foot-print
     allhits.drop('HEAD', axis=1, inplace=True)
     ### # Increase output of all channels with id below 130 by 1 ns --> NOT NEEDED
@@ -453,7 +410,7 @@ def read_data(input_files, runnum):
     # define channel within SL
     allhits['TDC_CHANNEL_NORM'] = (allhits['TDC_CHANNEL'] - NCHANNELS * (allhits['SL']%2)).astype(np.uint8)
 
-    # Detecting events based on EVENT_NR signals
+    # Detecting events based on trigger signals
     if args.event:
         df_events = calc_event_numbers(allhits, runnum)
     # Assigning orbit counter as event number
@@ -487,10 +444,10 @@ def read_data(input_files, runnum):
     df_events['TIME0_AFTER'] = df_events['TIME0'].diff(-1).fillna(0)
     
     # Removing hits with irrelevant tdc channels
-    allhits.drop(allhits.index[(allhits['TDC_CHANNEL_NORM'] > NCHANNELS)
-                 & ~((allhits['FPGA'] == CHANNEL_TRIGGER[0]) 
-                     & (allhits['TDC_CHANNEL'] == CHANNEL_TRIGGER[1])
-                 )], inplace=True)
+    sel = allhits['TDC_CHANNEL_NORM'] <= NCHANNELS
+    for ch in CHANNELS_TRIGGER:
+        sel = sel | ((allhits['FPGA'] == ch[0]) & (allhits['TDC_CHANNEL'] == ch[1]))
+    allhits.drop(allhits.index[~sel], inplace=True)
     # Removing events that don't pass acceptance cuts
     if args.accepted:
         select_accepted_events(allhits, df_events)

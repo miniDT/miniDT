@@ -6,8 +6,8 @@ import numpy as np
 NCHANNELS = 64                       # numbers of channels per chamber (one FPGA maps 2 chambers --> 128 channels per FPGA --> 2SLs)
 ### Virtual (FPGA, TDC_CHANNEL) pairs containing event/trigger information
 EVENT_NR_CHANNELS = [(1,138), (1,137), (0,138), (0,137)]
-CHANNELS_TRIGGER = [(0, 130), (0, 129), (1, 129)]
-CHANNEL_TRIGGER = CHANNELS_TRIGGER[2]
+CHANNELS_TRIGGER = [(1, 129)]  # external trigger
+# CHANNELS_TRIGGER = [(0, 139), (1, 139)]  # internal trigger (using OR of all the channels)
 ### Cell parameters
 XCELL     = 42.                      # cell width in mm
 ZCELL     = 13.                      # cell height in mm
