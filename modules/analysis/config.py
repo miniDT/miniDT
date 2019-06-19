@@ -6,6 +6,7 @@ import numpy as np
 NCHANNELS = 64                       # numbers of channels per chamber (one FPGA maps 2 chambers --> 128 channels per FPGA --> 2SLs)
 ### Virtual (FPGA, TDC_CHANNEL) pairs containing event/trigger information
 EVENT_NR_CHANNELS = [(1,138), (1,137), (0,138), (0,137)]
+CHANNELS_VIRTUAL = [(1, 129), (0, 139), (1, 139)]  # virtual channels that have to be stored
 CHANNELS_TRIGGER = [(1, 129)]  # external trigger
 # CHANNELS_TRIGGER = [(0, 139), (1, 139)]  # internal trigger (using OR of all the channels)
 ### Cell parameters
@@ -32,5 +33,6 @@ MEANTIMER_SL_MULT_MIN = 2  # minimum number of different SLs in a cluster of mea
 
 # Parameters of the DAQ signals [must be optimised according to the exact setup performance]
 TIME_OFFSET = 0                      # synchronization w.r.t external trigger
-TIME_WINDOW = (-25, 500)             # time window (lower, higher) edge, after synchronization
+TIME_WINDOW = (-1000, 1500)             # time window (lower, higher) edge, after synchronization
 TIME_OFFSET_SL = [0, 0, 0, 0]        # relative signal offset of each chamber
+# TIME_OFFSET_SL = [111, 111, 106, 106]        # relative signal offset of each chamber

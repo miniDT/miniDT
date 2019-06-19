@@ -12,7 +12,7 @@ import operator
 
 # Importing custom code snippets
 from modules.analysis.patterns import PATTERNS, PATTERN_NAMES, ACCEPTANCE_CHANNELS, MEAN_TZERO_DIFF, meantimereq, mean_tzero, tzero_clusters
-from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, EVENT_NR_CHANNELS
+from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, CHANNELS_VIRTUAL, EVENT_NR_CHANNELS
 from modules.analysis.config import EVENT_TIME_GAP, TIME_OFFSET, TIME_OFFSET_SL, TIME_WINDOW, DURATION, TRIGGER_TIME_ARRAY
 from modules.analysis.config import NHITS_SL, MEANTIMER_ANGLES, MEANTIMER_CLUSTER_SIZE, MEANTIMER_SL_MULT_MIN
 from modules.analysis.utils import print_progress, mem
@@ -84,66 +84,20 @@ def analyse_parallel(args):
     return analyse(*args)
 
 ############################################# ANALYSIS
-def analyse(dfhits, SL):
+def analyse(allhits, SL):
 
-    meantimer_info = {
-        't0_diff': [],
-        't0_mult': [],
-        'triplet_angle': [],
-        'nhits/event': [],
-    }
-    tzerodiff = []
-    tzeromult = []
-    hitperorbit = []
+    idx = allhits['SL'] == SL
 
-    # Selecting only physical channels of this layer
-    sel = dfhits['TDC_CHANNEL_NORM'] <= NCHANNELS
-
-    events = dfhits[sel].groupby('EVENT_NR')
     # # Excluding groups that have multiple time measurements with the same channel
     # # They strongly degrade performance of meantimer
     # idx = dfhits.loc[dfhits['TDC_CHANNEL_NORM'] <= NCHANNELS].groupby(EVT_COL).filter(lambda x: x['TDC_CHANNEL_NORM'].size == x['TDC_CHANNEL_NORM'].nunique()).index
 
-    n_events = len(events)
-    n_events_processed = 0
-
-    print('### SL {0:d}: Starting analysis with {1:d} hits in {2:d} events'.format(SL, dfhits.shape[0], len(events)))
-    if VERBOSE:
-        nhits = events['TDC_CHANNEL'].size()
-        print('Number of hits per event:  min: {0:d}   max: {1:d}'.format(nhits.min(), nhits.max()))
-    for event, df in events:
-        print_progress(n_events_processed, n_events, SL)
-        n_events_processed += 1
-        n_hits = df.shape[0]
-
-        if VERBOSE > 1:
-            print('analyzing event', event)
-            print('# hits =', n_hits)
-
-        meantimer_info['nhits/event'].append(n_hits)
-
-        # Getting the TIME0
-        tzero = df.iloc[0]['TIME0']
-        tzeromult.append(1)
-
-    # Selecting only hits that are from events with TIME0 properly estimated
-    idx = dfhits['TIME0'] > 0
-    
     # correct hits time for tzero
-    dfhits.loc[idx, 'TIMENS'] = dfhits['TIME_ABS'] - dfhits['TIME0']
+    allhits.loc[idx, 'TIMENS'] = allhits['TIME_ABS'] - allhits['TIME0']
     
-    # assign hits position (left/right wrt wire)
-
-    #dfhits['TIMENS'][dfhits['TIMENS']<0] = 0
-    #dfhits.loc[idx, 'X_POS_LEFT']  = ((dfhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + dfhits['X_POSSHIFT'])*XCELL + XCELL/2 - dfhits['TIMENS']*VDRIFT
-    #dfhits.loc[idx, 'X_POS_RIGHT'] = ((dfhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + dfhits['X_POSSHIFT'])*XCELL + XCELL/2 + dfhits['TIMENS']*VDRIFT
-
-    dfhits.loc[idx, 'X_POS_LEFT']  = ((dfhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + dfhits['X_POSSHIFT'])*XCELL + XCELL/2 - np.maximum(dfhits['TIMENS'], 0)*VDRIFT
-    dfhits.loc[idx, 'X_POS_RIGHT'] = ((dfhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + dfhits['X_POSSHIFT'])*XCELL + XCELL/2 + np.maximum(dfhits['TIMENS'], 0)*VDRIFT
-    df = dfhits.loc[idx]
-
-    # Returning the calculated results
-    return (SL, dfhits, df, meantimer_info)
+    # Assign hits position (left/right wrt wire)
+    allhits.loc[idx, 'X_POS_LEFT']  = ((allhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + allhits['X_POSSHIFT'])*XCELL + XCELL/2 - np.maximum(allhits['TIMENS'], 0)*VDRIFT
+    allhits.loc[idx, 'X_POS_RIGHT'] = ((allhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + allhits['X_POSSHIFT'])*XCELL + XCELL/2 + np.maximum(allhits['TIMENS'], 0)*VDRIFT
 
 
 def calc_event_numbers(allhits, runnum):
@@ -165,13 +119,13 @@ def calc_event_numbers(allhits, runnum):
     # Calculating cumulative sum to create group ids
     evt_group = evt_group.cumsum()
     # Adding column to be used for grouping hits with event number and trigger
-    allhits['evt_group'] = evt_group
-    allhits['evt_group'] = allhits['evt_group'].fillna(-1).astype(int)
+    allhits['EVENT_NR'] = evt_group
+    allhits['EVENT_NR'] = allhits['EVENT_NR'].fillna(-1).astype(int)
     # Getting back rows with relevant channels with grouping column updated
     ev_hits = allhits.loc[sel]
     ev_hits.set_index(['FPGA', 'TDC_CHANNEL'], inplace=True)
     # Checking each group to calculate event number for it
-    evt_groups = ev_hits.groupby('evt_group')
+    evt_groups = ev_hits.groupby('EVENT_NR')
     n_groups = len(evt_groups)
     n_groups_done = 0
     # Creating a dataframe with 1 row per event
@@ -231,14 +185,12 @@ def calc_event_numbers(allhits, runnum):
         df_events.loc[grp, ['EVENT_NR', 'TIME0']] = (evt_id, tzero)
 
         # Storing hits of the event with corresponding event number and t0
-        idx = allhits.index[window | (allhits['evt_group'] == grp)]
+        idx = allhits.index[window | (allhits['EVENT_NR'] == grp)]
         hits = hits.append(pd.DataFrame(np.array([evt_id, tzero]*len(idx)).reshape([-1, 2]), index=idx, columns=['EVENT_NR', 'TIME0']))
     # Updating hits in the main dataframe with EVENT_NR and TIME0 values from detected events
     hits['EVENT_NR'] = hits['EVENT_NR'].astype(int)
     allhits.loc[hits.index, ['EVENT_NR', 'TIME0']] = hits[['EVENT_NR', 'TIME0']]
 
-    # Removing the temporary grouping column
-    allhits.drop('evt_group', axis=1, inplace=True)
     # Creating a column with time passed since last event
     df_events.set_index('EVENT_NR', inplace=True)
     # Removing events that have no hits
@@ -296,13 +248,11 @@ def meantimer_results(df_hits, verbose=False):
     return tzeros, angles
 
 
-def save_root(dfs, df_events, output_path):
+def save_root(df_all, df_events, output_path):
     """Prints output to a text file with one event per line, sequence of hits in a line"""
-    if not dfs:
+    if df_all is None or df_all.empty:
         print('WARNING: No hits for writing into a text file')
         return
-    # Concatenating dataframe from different SLs
-    df_all = pd.concat(dfs)
     # Selecting only physical or trigger hits [for writing empty events as well]
     sel = df_all['TIME0'] > 0
     for ch in CHANNELS_TRIGGER:
@@ -413,7 +363,6 @@ def read_data(input_files, runnum):
     # Detecting events based on trigger signals
     if args.event:
         df_events = calc_event_numbers(allhits, runnum)
-    # Assigning orbit counter as event number
     else:
         # Grouping hits separated by large time gaps together
         allhits.sort_values('TIME_ABS', inplace=True)
@@ -445,7 +394,7 @@ def read_data(input_files, runnum):
     
     # Removing hits with irrelevant tdc channels
     sel = allhits['TDC_CHANNEL_NORM'] <= NCHANNELS
-    for ch in CHANNELS_TRIGGER:
+    for ch in CHANNELS_VIRTUAL:
         sel = sel | ((allhits['FPGA'] == ch[0]) & (allhits['TDC_CHANNEL'] == ch[1]))
     allhits.drop(allhits.index[~sel], inplace=True)
     # Removing events that don't pass acceptance cuts
@@ -725,30 +674,21 @@ def process(input_files):
     if args.layer is None:
         # Processing all layers in parallel threads
         allhits, df_events = read_data(input_files, runnum)
-        # br()
         for sl in range(4):
         # Avoiding parallel processing due to memory duplication by child processes
-            results.append(analyse(allhits[allhits['SL'] == sl].copy(), sl))
+            analyse(allhits, sl)
         # pool = Pool(4)
         # results = pool.map(analyse_parallel, jobs)
     else:
         # Running the analysis on SL 0
         allhits, df_events = read_data(input_files, runnum)
-        results.append(analyse(allhits[allhits['SL'] == args.layer], args.layer))
+        analyse(allhits, args.layer)
     # Matching triplets from same event
     if args.triplets:
-        sync_triplets(results, df_events)
+        # FIXME: This is not going to work due to the changed format of the function input
+        sync_triplets(allhits, df_events)
     
-    print('### Filling output')
-    for result in results:
-        if not result:
-            continue
-
-        # Writing data to CSV
-        SL = result[0]
-        if args.csv:
-            df_out = df[['SL','LAYER','WIRE_NUM','TDC_CHANNEL_NORM','TIMENS','TIME0','X_POS_LEFT','X_POS_RIGHT','Z_POS']]
-            df_out.to_csv('out_df_{0:d}.csv'.format(SL))
+    print('### Writing output')
 
     # Determining output file path
     file = os.path.splitext(parts[-1])[0]
@@ -761,18 +701,19 @@ def process(input_files):
 
     ### GENERATE TEXT OUTPUT [one event per line]
     if args.root:
-        dfs = []
-        for result in results:
-            if not len(result) > 2:
-                continue
-            # Collecting dataframes with all hits
-            dfs.append(result[1])
         out_path = os.path.join('text', run, file+'.txt')
         try:
             os.makedirs(os.path.dirname(out_path))
         except:
             pass
-        save_root(dfs, df_events, out_path)
+        save_root(allhits, df_events, out_path)
+
+    ### GENERATE CSV OUTPUT
+    if args.csv:
+        out_path = os.path.join('text', run, file+'.csv')
+        df_out = allhits[['EVENT_NR', 'FPGA', 'TDC_CHANNEL', 'SL','LAYER','TDC_CHANNEL_NORM', 'ORBIT_CNT', 'TIMENS', 'TIME0','X_POS_LEFT','X_POS_RIGHT','Z_POS']]
+        print('### Writing {0:d} hits to file: {1:s}'.format(df_out.shape[0], out_path))
+        df_out.to_csv(out_path)
 
     print('### Done')
 
