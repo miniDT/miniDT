@@ -35,4 +35,4 @@ MEANTIMER_SL_MULT_MIN = 2  # minimum number of different SLs in a cluster of mea
 TIME_OFFSET = 0                      # synchronization w.r.t external trigger
 TIME_WINDOW = (-1000, 1500)             # time window (lower, higher) edge, after synchronization
 TIME_OFFSET_SL = [0, 0, 0, 0]        # relative signal offset of each chamber
-# TIME_OFFSET_SL = [111, 111, 106, 106]        # relative signal offset of each chamber
+# TIME_OFFSET_SL = [111, 111, 106, 106]        # relative signal offset of each chamber [RUN617]

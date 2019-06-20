@@ -15,7 +15,7 @@ from modules.analysis.patterns import PATTERNS, PATTERN_NAMES, ACCEPTANCE_CHANNE
 from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, CHANNELS_VIRTUAL, EVENT_NR_CHANNELS
 from modules.analysis.config import EVENT_TIME_GAP, TIME_OFFSET, TIME_OFFSET_SL, TIME_WINDOW, DURATION, TRIGGER_TIME_ARRAY
 from modules.analysis.config import NHITS_SL, MEANTIMER_ANGLES, MEANTIMER_CLUSTER_SIZE, MEANTIMER_SL_MULT_MIN
-from modules.analysis.utils import print_progress, mem
+from modules.utils import print_progress
 
 
 
@@ -290,8 +290,7 @@ def read_data(input_files, runnum):
     hits = []
     for index, file in enumerate(input_files):
         skipLines = 0
-#        if args.skip and index == 0:
-#            skipLines = range(1,131072)
+        # Skipping the old buffer content of the boards that is dumped at the beginning of the run
         if 'data_000000' in file:
             skipLines = range(1,131072)
         df = pd.read_csv(file, nrows=args.number, skiprows=skipLines, engine='c')
