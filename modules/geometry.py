@@ -59,6 +59,6 @@ class Geometry:
         hits['X_POS_LEFT']  = hits['X_POS_WIRE'] - np.maximum(hits['TIMENS'], 0)*self.VDRIFT
         hits['X_POS_RIGHT']  = hits['X_POS_WIRE'] + np.maximum(hits['TIMENS'], 0)*self.VDRIFT
         sel_phys = hits['SL'] >= 0
-        hits.loc[sel_phys, ['X_POS_LEFT', 'X_POS_RIGHT']] = [0.0, 0.0]
+        hits.loc[~sel_phys, ['X_POS_LEFT', 'X_POS_RIGHT']] = [0.0, 0.0]
 
 
