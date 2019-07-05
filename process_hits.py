@@ -12,10 +12,12 @@ import operator
 
 # Importing custom code snippets
 from modules.analysis.patterns import PATTERNS, PATTERN_NAMES, ACCEPTANCE_CHANNELS, MEAN_TZERO_DIFF, meantimereq, mean_tzero, tzero_clusters
-from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, CHANNELS_VIRTUAL, EVENT_NR_CHANNELS
+from modules.analysis.config import NCHANNELS, XCELL, ZCELL, TDRIFT, VDRIFT, CHANNELS_TRIGGER, CHANNELS_VIRTUAL
 from modules.analysis.config import EVENT_TIME_GAP, TIME_OFFSET, TIME_OFFSET_SL, TIME_WINDOW, DURATION, TRIGGER_TIME_ARRAY
 from modules.analysis.config import NHITS_SL, MEANTIMER_ANGLES, MEANTIMER_CLUSTER_SIZE, MEANTIMER_SL_MULT_MIN
-from modules.utils import print_progress
+from modules.utils import print_progress, OUT_CONFIG
+from modules.geometry import Geometry
+from modules.analysis import config as CONFIGURATION
 
 
 
@@ -31,19 +33,21 @@ parser.add_argument('-e', '--event',  help='Split hits in events based on extern
 parser.add_argument('-E', '--events', metavar='N',  help='Only process events with specified numbers', type=int, default=None, nargs='+')
 parser.add_argument('-g', '--group', metavar='N', type=int, help='Process input files sequentially in groups of N', action='store', default=999999)
 parser.add_argument('-l', '--layer',   action='store', default=None, dest='layer',   type=int, help='Layer to process [default: process all 4 layers]')
-parser.add_argument('-m', '--max_hits',   action='store', default=200, dest='max_hits',   type=int, help='Maximum number of hits allowed in one event [default: 200]')
+parser.add_argument('-m', '--meantimer',  help='Do meantimer triplet search', action='store_true', default=False)
+parser.add_argument('--max_hits',   action='store', default=200, dest='max_hits',   type=int, help='Maximum number of hits allowed in one event [default: 200]')
 parser.add_argument('-n', '--number', action='store', default=None,  dest='number', type=int, help='Number of hits to analyze. (Note: this is applied to each file if multiple files are analyzed with -g)')
-parser.add_argument('-r', '--root',  help='Print output to a ROOT friendly text file', action='store_true', default=False)
+parser.add_argument('--hits_pos',  help='Print hits with drift time + wire X/Z position', action='store_true', default=False)
+parser.add_argument('--hits_pos_layer',  help='Print hits with left/right X position + layer number', action='store_true', default=False)
+parser.add_argument('--hits_time_layer',  help='Print hits with drift time + wire X position + layer number', action='store_true', default=False)
 parser.add_argument('-s', '--suffix',  action='store', default=None, help='Suffix to add to output file names', type=str)
-parser.add_argument('-t', '--triplets',  help='Do triplet search', action='store_true', default=False)
 parser.add_argument('-u', '--update_tzero',  help='Update TIME0 with meantimer solution', action='store_true', default=False)
 parser.add_argument('-v', '--verbose',  help='Increase verbosity of the log', action='store', default=0)
 args = parser.parse_args()
 for file_path in args.inputs:
     if not os.path.exists(os.path.expandvars(file_path)):
         print('--- ERROR ---')
-        print('  \''+args.input+'\' file not found')
-        print('  please point to the correct path to the file containing the unpacked data' )
+        print('  \''+file_path+'\' file not found')
+        print('  please provide the correct path to the file containing the unpacked data' )
         print()
         exit()
 
@@ -141,15 +145,6 @@ def calc_event_numbers(allhits, runnum):
         print_progress(n_groups_done, n_groups)
         n_groups_done += 1
         df = df.sort_index()
-        try:
-            vals_int = df['TDC_MEAS'].reindex(EVENT_NR_CHANNELS, fill_value=0)
-        except Exception:
-            # Removing duplicate entries with the same channel value (very rare occasion)
-            if VERBOSE:
-                print('WARNING: duplicate entries with the same channel for event number:')
-                print(df[['ORBIT_CNT', 'BX_COUNTER', 'TDC_MEAS']])
-            df = df[~df.index.duplicated(keep='first')]
-            vals_int = df['TDC_MEAS'].reindex(EVENT_NR_CHANNELS, fill_value=0)
 
         evt_id = grp
         # Skipping if only one specific event should be processed
@@ -248,36 +243,27 @@ def meantimer_results(df_hits, verbose=False):
     return tzeros, angles
 
 
-def save_root(df_all, df_events, output_path):
+def save_hits(df_all, df_events, output_path, format='time_layer'):
     """Prints output to a text file with one event per line, sequence of hits in a line"""
     if df_all is None or df_all.empty:
         print('WARNING: No hits for writing into a text file')
         return
     # Selecting only physical or trigger hits [for writing empty events as well]
-    sel = df_all['TIME0'] > 0
-    for ch in CHANNELS_TRIGGER:
+    sel = df_all['TDC_CHANNEL_NORM'] <= NCHANNELS
+    for ch in CHANNELS_VIRTUAL:
         sel = sel | ((df_all['FPGA'] == ch[0]) & (df_all['TDC_CHANNEL'] == ch[1]))
-    df_all = df_all[sel]
-    events = df_all.groupby('EVENT_NR')
-    layers = range(4)
-    print('### Writing {0:d} hits in {1:d} events to file: {2:s}'.format(df_all.shape[0], len(events), output_path))
+    events = df_all[sel].groupby('EVENT_NR')
+    print('### Writing hits in {0:d} events to file: {1:s}'.format(len(events), output_path))
     with open(output_path, 'w') as outfile:
+        outfile.write('# {0:s} [HIT1 HIT2 ... HITN]  |  HITN: '.format(' '.join(OUT_CONFIG['event']['fields']))+' '.join(OUT_CONFIG[format]['fields'])+'\n')
         for event, df in events:
-            ch_sel = (df['TIME0'] > 0)
-            n_layer_hits = df.loc[ch_sel].sort_values('SL').groupby('SL').size().reindex(layers).fillna(0).astype(int).tolist()
+            ch_sel = (df['TDC_CHANNEL_NORM'] > 0)
             nhits = df.loc[ch_sel].shape[0]
-            # if nhits < 3:
-            #     continue
-            orbit, tzero = df.iloc[0][['ORBIT_CNT', 'TIME0']]
-            # tzero_meantimer, meantimer_mult, meantimer_min, meantimer_max = df_events.loc[event, ['MEANTIMER_MEAN', 'MEANTIMER_MULT', 'MEANTIMER_MIN', 'MEANTIMER_MAX']]
-            # Merging all hits
-            line = '{0:d} {1:d}'.format(event, nhits) 
-            # line = '{0:d} {1:d} {2:d} {3} {4:d}'.format(event, int(orbit), nhits, n_layer_hits, int(tzero)) 
-            # line = '{0:d} {1:d} {2:d} {3} {4:d} {5:.1f} {6:d} {7:d}'.format(event, int(orbit), nhits, n_layer_hits, int(tzero), 
-                                                                            # tzero_meantimer-tzero, int(meantimer_max - meantimer_min), int(meantimer_mult))
+            # Merging all hits in one line
+            line = OUT_CONFIG['event']['format'].format(event, nhits) 
             if nhits > 0:
-                line += ' ' + ' '.join(['{0:.0f} {1:.0f} {2:.3e} {3:.3e} {4:.1f}'.format(*values)
-                                       for values in df.loc[ch_sel, ['SL', 'LAYER', 'X_POS_LEFT', 'X_POS_RIGHT', 'TIMENS']].values])
+                line += ' ' + ' '.join([OUT_CONFIG[format]['format'].format(*values)
+                                       for values in df.loc[ch_sel, OUT_CONFIG[format]['fields']].values])
             outfile.write(line+'\n')
 
 
@@ -311,6 +297,9 @@ def read_data(input_files, runnum):
     allhits.drop(allhits.index[allhits['HEAD'] != 1], inplace=True)
     # Removing unused columns to save memory foot-print
     allhits.drop('HEAD', axis=1, inplace=True)
+    # Calculating gometry related columns
+    G = Geometry(CONFIGURATION)
+    G.fill_hits_dataframe(allhits)
     ### # Increase output of all channels with id below 130 by 1 ns --> NOT NEEDED
     ### allhits.loc[allhits['TDC_CHANNEL'] <= 130, 'TDC_MEAS'] = allhits['TDC_MEAS']+1 
     # Calculate absolute time in ns of each hit
@@ -329,24 +318,13 @@ def read_data(input_files, runnum):
         (allhits['TDC_CHANNEL'] % 4 == 0 ),
     ]
     chanshift_x = [  0,            -1,           0,            -1,        ]
-    layer_z     = [  1,            3,            2,            4,         ]
     pos_z       = [  ZCELL*3.5,    ZCELL*1.5,    ZCELL*2.5,    ZCELL*0.5, ]
     posshift_x  = [  0,            0,            0.5,          0.5,       ]
     # Adding columns
-    allhits['LAYER']      = np.select(conditions, layer_z,      default=0).astype(np.uint8)
     allhits['X_CHSHIFT']  = np.select(conditions, chanshift_x,  default=0).astype(np.int8)
     allhits['X_POSSHIFT'] = np.select(conditions, posshift_x,   default=0).astype(np.float16)
     allhits['Z_POS']      = np.select(conditions, pos_z,        default=0).astype(np.float16)
 
-    # conditions  = FPGA number and TDC_CHANNEL in range
-    # SL         <- superlayer = chamber number from 0 to 3 (0,1 FPGA#0 --- 2,3 FPGA#1)
-    conditions_SL = [
-        ((allhits['FPGA'] == 0) & (allhits['TDC_CHANNEL'] <= NCHANNELS )),
-        ((allhits['FPGA'] == 0) & (allhits['TDC_CHANNEL'] > NCHANNELS ) & (allhits['TDC_CHANNEL'] <= 2*NCHANNELS )),
-        ((allhits['FPGA'] == 1) & (allhits['TDC_CHANNEL'] <= NCHANNELS )),
-        ((allhits['FPGA'] == 1) & (allhits['TDC_CHANNEL'] > NCHANNELS ) & (allhits['TDC_CHANNEL'] <= 2*NCHANNELS )),
-    ]
-    allhits['SL'] = np.select(conditions_SL, [0, 1, 2, 3], default=-1).astype(np.int8)
     # Correcting absolute time by per-chamber latency
     for sl in range(4):
         sel = allhits['SL'] == sl
@@ -355,9 +333,6 @@ def read_data(input_files, runnum):
     # # Removing hits from unused layers
     # if args.layer is not None:
     #     allhits.drop(allhits[~allhits['SL'].isin([args.layer, -1])].index, inplace=True)
-
-    # define channel within SL
-    allhits['TDC_CHANNEL_NORM'] = (allhits['TDC_CHANNEL'] - NCHANNELS * (allhits['SL']%2)).astype(np.uint8)
 
     # Detecting events based on trigger signals
     if args.event:
@@ -673,6 +648,7 @@ def process(input_files):
     if args.layer is None:
         # Processing all layers in parallel threads
         allhits, df_events = read_data(input_files, runnum)
+        # br()
         for sl in range(4):
         # Avoiding parallel processing due to memory duplication by child processes
             analyse(allhits, sl)
@@ -683,7 +659,7 @@ def process(input_files):
         allhits, df_events = read_data(input_files, runnum)
         analyse(allhits, args.layer)
     # Matching triplets from same event
-    if args.triplets:
+    if args.meantimer:
         # FIXME: This is not going to work due to the changed format of the function input
         sync_triplets(allhits, df_events)
     
@@ -698,14 +674,22 @@ def process(input_files):
     if args.suffix:
         file += '_{0:s}'.format(args.suffix)
 
-    ### GENERATE TEXT OUTPUT [one event per line]
-    if args.root:
-        out_path = os.path.join('text', run, file+'.txt')
+    ### GENERATE OUTPUT IN TXT OR CSV FORMAT
+    if args.hits_pos or args.hits_time_layer or args.hits_pos_layer:
+        out_path = os.path.join('text', run, file)
         try:
             os.makedirs(os.path.dirname(out_path))
         except:
             pass
-        save_root(allhits, df_events, out_path)
+        if args.hits_pos:
+            out_type = 'pos'
+            save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
+        if args.hits_pos_layer:
+            out_type = 'pos_layer'
+            save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
+        if args.hits_time_layer:
+            out_type = 'time_layer'
+            save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
 
     ### GENERATE CSV OUTPUT
     if args.csv:

@@ -4,6 +4,26 @@ import sys
 import math
 import resource
 
+OUT_CONFIG = {
+    'pos_layer': {
+        'format': '{0:.0f} {1:.0f} {2:.3e} {3:.3e} {4:.1f}', 
+        'fields': ['SL', 'LAYER', 'X_POS_LEFT', 'X_POS_RIGHT', 'TIMENS']
+    },
+    'time_layer': {
+        'format': '{0:.0f} {1:.0f} {2:.1f} {3:.1f}', 
+        'fields': ['SL', 'LAYER', 'X_POS_WIRE', 'TIMENS']
+    },
+    'pos': {
+        'format': '{0:.0f} {1:.1f} {2:.1f} {3:.1f}', 
+        'fields': ['SL', 'Z_POS_WIRE', 'X_POS_WIRE', 'TIMENS'],
+        'struct': ''
+    },
+    'event': {
+        'format': '{0:d} {1:d}',
+        'fields': ['EVENT_NR', 'NHITS'],
+    }
+}
+
 def print_progress(n_done, n_all, sl=None):
     """Prints progress in percentage only when it changes"""
     if n_done % math.ceil(float(n_all) / 100) == 0:
