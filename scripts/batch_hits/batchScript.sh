@@ -7,7 +7,7 @@ WORKDIR=$1/$2
 echo "Starting job at: $WORKDIR"
 
 # Configure the environment
-cd $SUBDIR
+cd $SUBDIR/../../
 source setenv.sh
 cd $WORKDIR
 
