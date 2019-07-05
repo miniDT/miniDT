@@ -21,7 +21,7 @@ class Geometry:
         self.VDRIFT = self.XCELL*0.5 / self.TDRIFT
         self.GEO_CONDITIONS = config.GEO_CONDITIONS
 
-    def fill_hits_dataframe(self, hits):
+    def fill_hits_geometry(self, hits):
         """Fills the dataframe of input hits with calculated geometry information"""
         # Setting superlayer numbers
         hits_chfpga = []
@@ -37,10 +37,28 @@ class Geometry:
         ]
         hits['LAYER'] = np.select(hits_chrem, self.GEO_CONDITIONS['chrem_layer'], default=0).astype(np.uint8)
         # Setting normalized channel number inside chamber
-        hits['TDC_CHANNEL_NORM'] = -1
-        hits.loc[hits['SL'] >= 0, 'TDC_CHANNEL_NORM'] = (hits['TDC_CHANNEL'] - self.NCHANNELS * (hits['SL']%2)).astype(np.uint8)
+        hits['TDC_CHANNEL_NORM'] = (hits['TDC_CHANNEL'] - self.NCHANNELS * (hits['SL']%2)).astype(np.uint8)
+        # Setting wire number within the layer
+        sel_phys = hits['SL'] >= 0
+        hits['WIRE_NUM'] = ((hits['TDC_CHANNEL_NORM'] - 1) / 4 + 1).astype(np.uint8)
         # Setting wire positions
-        hits['Z_POS_WIRE'] = (hits['LAYER'].astype(np.float16) - 0.5) * self.ZCELL
-        hits['X_POS_WIRE'] = (((hits['TDC_CHANNEL'] - 1) / 4).astype(np.float16) + 0.5) * self.XCELL
-        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_chrem, self.GEO_CONDITIONS['chrem_shiftx'], default=0).astype(np.float16)
+        hits_layer = [
+            (hits['LAYER'] == 1),
+            (hits['LAYER'] == 2),
+            (hits['LAYER'] == 3),
+            (hits['LAYER'] == 4),
+        ]
+        hits['Z_POS_WIRE'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(np.float16)
+        hits['X_POS_WIRE'] = (hits['WIRE_NUM'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(np.float16) * self.XCELL
+        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(np.float16)
+        hits.loc[~sel_phys, ['TDC_CHANNEL_NORM', 'WIRE_NUM', 'LAYER', 'X_POS_WIRE', 'Z_POS_WIRE']] = [0, 0, 0, 0.0, 0.0]
+
+    def fill_hits_position(self, hits):
+        """Fills the dataframe of input hits with calculated position values"""
+        hits['Z_POS'] = hits['Z_POS_WIRE']
+        hits['X_POS_LEFT']  = hits['X_POS_WIRE'] - np.maximum(hits['TIMENS'], 0)*self.VDRIFT
+        hits['X_POS_RIGHT']  = hits['X_POS_WIRE'] + np.maximum(hits['TIMENS'], 0)*self.VDRIFT
+        sel_phys = hits['SL'] >= 0
+        hits.loc[sel_phys, ['X_POS_LEFT', 'X_POS_RIGHT']] = [0.0, 0.0]
+
 

@@ -83,26 +83,7 @@ EVT_COL = 'EVENT_NR' if args.event else 'ORBIT_CNT'
 #      3         |    2    |    6    |   10    |
 #      4              |    4    |    8    |   12    |
 
-def analyse_parallel(args):
-    """Wrapper around the main function to properly pass arguments"""
-    return analyse(*args)
-
 ############################################# ANALYSIS
-def analyse(allhits, SL):
-
-    idx = allhits['SL'] == SL
-
-    # # Excluding groups that have multiple time measurements with the same channel
-    # # They strongly degrade performance of meantimer
-    # idx = dfhits.loc[dfhits['TDC_CHANNEL_NORM'] <= NCHANNELS].groupby(EVT_COL).filter(lambda x: x['TDC_CHANNEL_NORM'].size == x['TDC_CHANNEL_NORM'].nunique()).index
-
-    # correct hits time for tzero
-    allhits.loc[idx, 'TIMENS'] = allhits['TIME_ABS'] - allhits['TIME0']
-    
-    # Assign hits position (left/right wrt wire)
-    allhits.loc[idx, 'X_POS_LEFT']  = ((allhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + allhits['X_POSSHIFT'])*XCELL + XCELL/2 - np.maximum(allhits['TIMENS'], 0)*VDRIFT
-    allhits.loc[idx, 'X_POS_RIGHT'] = ((allhits['TDC_CHANNEL_NORM']-0.5).floordiv(4) + allhits['X_POSSHIFT'])*XCELL + XCELL/2 + np.maximum(allhits['TIMENS'], 0)*VDRIFT
-
 
 def calc_event_numbers(allhits, runnum):
     """Calculates event number for groups of hits based on trigger hits"""
@@ -299,7 +280,7 @@ def read_data(input_files, runnum):
     allhits.drop('HEAD', axis=1, inplace=True)
     # Calculating gometry related columns
     G = Geometry(CONFIGURATION)
-    G.fill_hits_dataframe(allhits)
+    G.fill_hits_geometry(allhits)
     ### # Increase output of all channels with id below 130 by 1 ns --> NOT NEEDED
     ### allhits.loc[allhits['TDC_CHANNEL'] <= 130, 'TDC_MEAS'] = allhits['TDC_MEAS']+1 
     # Calculate absolute time in ns of each hit
@@ -321,7 +302,6 @@ def read_data(input_files, runnum):
     pos_z       = [  ZCELL*3.5,    ZCELL*1.5,    ZCELL*2.5,    ZCELL*0.5, ]
     posshift_x  = [  0,            0,            0.5,          0.5,       ]
     # Adding columns
-    allhits['X_CHSHIFT']  = np.select(conditions, chanshift_x,  default=0).astype(np.int8)
     allhits['X_POSSHIFT'] = np.select(conditions, posshift_x,   default=0).astype(np.float16)
     allhits['Z_POS']      = np.select(conditions, pos_z,        default=0).astype(np.float16)
 
@@ -329,10 +309,6 @@ def read_data(input_files, runnum):
     for sl in range(4):
         sel = allhits['SL'] == sl
         allhits.loc[sel, 'TIME_ABS'] = allhits.loc[sel, 'TIME_ABS'] + TIME_OFFSET_SL[sl]
-    
-    # # Removing hits from unused layers
-    # if args.layer is not None:
-    #     allhits.drop(allhits[~allhits['SL'].isin([args.layer, -1])].index, inplace=True)
 
     # Detecting events based on trigger signals
     if args.event:
@@ -377,9 +353,13 @@ def read_data(input_files, runnum):
 
     nHits = allhits.shape[0]
     # Adding extra columns to be filled in the analyse method
-    allhits['TIMENS'] = np.zeros(nHits, dtype=np.float16)
-    allhits['X_POS_LEFT'] = np.zeros(nHits, dtype=np.float32)
-    allhits['X_POS_RIGHT'] = np.zeros(nHits, dtype=np.float32)
+    # allhits['TIMENS'] = np.zeros(nHits, dtype=np.float16)
+    # allhits['X_POS_LEFT'] = np.zeros(nHits, dtype=np.float32)
+    # allhits['X_POS_RIGHT'] = np.zeros(nHits, dtype=np.float32)
+    
+    # Adding the time and position information for the hits
+    allhits['TIMENS'] = allhits['TIME_ABS'] - allhits['TIME0']
+    G.fill_hits_position(allhits)
 
 
     #############################################
@@ -645,19 +625,8 @@ def process(input_files):
     run = os.path.split(parts[0])[-1]
     runnum = int(run.split('Run')[-1])
 
-    if args.layer is None:
-        # Processing all layers in parallel threads
-        allhits, df_events = read_data(input_files, runnum)
-        # br()
-        for sl in range(4):
-        # Avoiding parallel processing due to memory duplication by child processes
-            analyse(allhits, sl)
-        # pool = Pool(4)
-        # results = pool.map(analyse_parallel, jobs)
-    else:
-        # Running the analysis on SL 0
-        allhits, df_events = read_data(input_files, runnum)
-        analyse(allhits, args.layer)
+    # Reading and processing the data
+    allhits, df_events = read_data(input_files, runnum)
     # Matching triplets from same event
     if args.meantimer:
         # FIXME: This is not going to work due to the changed format of the function input

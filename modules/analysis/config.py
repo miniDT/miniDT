@@ -29,7 +29,9 @@ TRIGGER_TIME_ARRAY = np.array([DURATION['orbit'], DURATION['bx'], DURATION['tdc'
 ###### Description of geometry
 GEO_CONDITIONS = {
     'chrem_layer': [1, 3, 2, 4,],
-    'chrem_shiftx': [0.0, 0.0, XCELL*0.5, XCELL*0.5]
+    'layer_shiftx': [-0.5*XCELL, 0.0, -0.5*XCELL, 0.0],
+    'layer_posz': [1.5*ZCELL, 0.5*ZCELL, -0.5*ZCELL, -1.5*ZCELL],
+    'origin_wire': 8  # in layer 2
 }
 
 ###### Virtual (FPGA, TDC_CHANNEL) pairs containing trigger information
