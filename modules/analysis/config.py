@@ -1,4 +1,4 @@
-"""Configuration for the analysis"""
+"""Configuration for the hit analysis"""
 
 import numpy as np
 

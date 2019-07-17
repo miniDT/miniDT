@@ -13,6 +13,10 @@ OUT_CONFIG = {
         'format': '{0:.0f} {1:.0f} {2:.1f} {3:.1f}', 
         'fields': ['SL', 'LAYER', 'X_POS_WIRE', 'TIMENS']
     },
+    'time_wire': {
+        'format': '{0:.0f} {1:.0f} {2:.0f} {3:.1f}', 
+        'fields': ['SL', 'LAYER', 'WIRE_NUM', 'TIMENS']
+    },
     'pos': {
         'format': '{0:.0f} {1:.1f} {2:.1f} {3:.1f}', 
         'fields': ['SL', 'Z_POS_WIRE', 'X_POS_WIRE', 'TIMENS'],

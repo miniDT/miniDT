@@ -39,6 +39,7 @@ parser.add_argument('-n', '--number', action='store', default=None,  dest='numbe
 parser.add_argument('--hits_pos',  help='Print hits with drift time + wire X/Z position', action='store_true', default=False)
 parser.add_argument('--hits_pos_layer',  help='Print hits with left/right X position + layer number', action='store_true', default=False)
 parser.add_argument('--hits_time_layer',  help='Print hits with drift time + wire X position + layer number', action='store_true', default=False)
+parser.add_argument('--hits_time_wire',  help='Print hits with drift time + wire number + layer number', action='store_true', default=False)
 parser.add_argument('-s', '--suffix',  action='store', default=None, help='Suffix to add to output file names', type=str)
 parser.add_argument('-u', '--update_tzero',  help='Update TIME0 with meantimer solution', action='store_true', default=False)
 parser.add_argument('-v', '--verbose',  help='Increase verbosity of the log', action='store', default=0)
@@ -224,7 +225,7 @@ def meantimer_results(df_hits, verbose=False):
     return tzeros, angles
 
 
-def save_hits(df_all, df_events, output_path, format='time_layer'):
+def save_hits(df_all, df_events, output_path, format='time_wire'):
     """Prints output to a text file with one event per line, sequence of hits in a line"""
     if df_all is None or df_all.empty:
         print('WARNING: No hits for writing into a text file')
@@ -644,7 +645,7 @@ def process(input_files):
         file += '_{0:s}'.format(args.suffix)
 
     ### GENERATE OUTPUT IN TXT OR CSV FORMAT
-    if args.hits_pos or args.hits_time_layer or args.hits_pos_layer:
+    if any([args.hits_pos, args.hits_time_layer, args.hits_pos_layer, args.hits_time_wire]):
         out_path = os.path.join('text', run, file)
         try:
             os.makedirs(os.path.dirname(out_path))
@@ -658,6 +659,9 @@ def process(input_files):
             save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
         if args.hits_time_layer:
             out_type = 'time_layer'
+            save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
+        if args.hits_time_wire:
+            out_type = 'time_wire'
             save_hits(allhits, df_events, '{0:s}_{1:s}.txt'.format(out_path, out_type), out_type)
 
     ### GENERATE CSV OUTPUT

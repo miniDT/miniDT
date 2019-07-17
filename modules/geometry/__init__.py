@@ -1,11 +1,17 @@
 """Code for conversion between FPGA channel numbers and geometry parameters in various schemes"""
 
-from pdb import set_trace as br
 import numpy as np
+from pdb import set_trace as br
+from sympy.vector import CoordSys3D
+
+
+DTYPE_COOR = np.float32
 
 
 class Geometry:
     """Holds the geometry information and provides various conversion methods"""
+
+    SL = {}
 
     def __init__(self, config):
         self.load_config(config)
@@ -48,15 +54,35 @@ class Geometry:
             (hits['LAYER'] == 3),
             (hits['LAYER'] == 4),
         ]
-        hits['Z_POS_WIRE'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(np.float16)
-        hits['X_POS_WIRE'] = (hits['WIRE_NUM'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(np.float16) * self.XCELL
-        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(np.float16)
+        hits['Z_POS_WIRE'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(np.float64)
+        hits['X_POS_WIRE'] = (hits['WIRE_NUM'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(np.float64) * self.XCELL
+        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(np.float64)
         hits.loc[~sel_phys, ['TDC_CHANNEL_NORM', 'WIRE_NUM', 'LAYER', 'X_POS_WIRE', 'Z_POS_WIRE']] = [0, 0, 0, 0.0, 0.0]
 
-    def fill_hits_position(self, hits):
+    def fill_hits_position(self, hits, reco=False):
         """Fills the dataframe of input hits with calculated position values"""
-        hits['Z_POS'] = hits['Z_POS_WIRE']
-        hits['X_POS_LEFT']  = hits['X_POS_WIRE'] - np.maximum(hits['TIMENS'], 0)*self.VDRIFT
-        hits['X_POS_RIGHT']  = hits['X_POS_WIRE'] + np.maximum(hits['TIMENS'], 0)*self.VDRIFT
-        sel_phys = hits['SL'] >= 0
-        hits.loc[~sel_phys, ['X_POS_LEFT', 'X_POS_RIGHT']] = [0.0, 0.0]
+        if not reco:
+            # Input hits are from the raw data
+            hits['Z_POS'] = hits['Z_POS_WIRE']
+            hits['X_POS_LEFT']  = hits['X_POS_WIRE'] - np.maximum(hits['TIMENS'], 0)*self.VDRIFT
+            hits['X_POS_RIGHT']  = hits['X_POS_WIRE'] + np.maximum(hits['TIMENS'], 0)*self.VDRIFT
+            sel_phys = hits['SL'] >= 0
+            hits.loc[~sel_phys, ['X_POS_LEFT', 'X_POS_RIGHT']] = [0.0, 0.0]
+        else:
+            # Input hits are at the reconstruction level
+            nhits = len(hits)
+            hits_layer = [
+                (hits['layer'] == 1),
+                (hits['layer'] == 2),
+                (hits['layer'] == 3),
+                (hits['layer'] == 4),
+            ]
+            hits['posz'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(DTYPE_COOR)
+            hits['posy'] = np.zeros(nhits, dtype=DTYPE_COOR)
+            posx_wire = (hits['wire'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(DTYPE_COOR) * self.XCELL
+            posx_wire = posx_wire + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(DTYPE_COOR)
+            hits['lposx']  = (posx_wire - np.maximum(hits['time'], 0)*self.VDRIFT).astype(DTYPE_COOR)
+            hits['rposx']  = (posx_wire + np.maximum(hits['time'], 0)*self.VDRIFT).astype(DTYPE_COOR)
+
+
+
