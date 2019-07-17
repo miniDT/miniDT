@@ -15,13 +15,22 @@ To profile the code:
 
 - - - - -
 
-### Running the offline analysis
-   * using raw external trigger:  
-     `./offline_analysis.py -rep <list of input TXT files>`
-   * using raw external trigger, with `t0` determined by meantimer (for avoiding jitter of the external trigger):  
-     `./offline_analysis.py -urepa <list of input TXT files>`
-   * using meantimer to find aligned hits in each orbit (external trigger not used at all):
-     `./offline_analysis.py -trpa <list of input TXT files>`
+### Processing the RAW data to extract hits:
 
-Exclude the `-p` option if you don't need to produce the plots.  
-Events with no hits are excluded.
+Configuration of the setup defined in `modules/analysis/config.py`.  
+One of the following methods for event search can be used:
+   * using raw external trigger:  
+     `./offline_analysis.py -e <formats> <list of input TXT files>`
+   * using raw external trigger, with `t0` determined by meantimer (for avoiding jitter of the external trigger):  
+     `./offline_analysis.py -emua <formats> <list of input TXT files>`
+   * using meantimer to find aligned hits in each orbit (external trigger not used at all):  
+     `./offline_analysis.py -mua <formats> <list of input TXT files>`
+  
+  Available format options are the ones starting with `--hits_*` in the help message
+
+- - - - -
+
+### Performing track reconstruction
+Configuration of the track reconstruction defined in `modules/reco/config.py`.  
+Output of the `process_hits.py` is used as input:  
+`./reco_tracks.py <list of input TXT files>`
