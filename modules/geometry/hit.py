@@ -6,30 +6,6 @@ from pdb import set_trace as br
 from modules.geometry import Geometry, DTYPE_COOR
 from modules.analysis import config
 
-class ProtoHit:
-    """Hit as seen by the DAQ"""
-
-    def __init__(self, sl, layer, wire, time):
-        self.sl = sl
-        self.layer = layer
-        self.wire = wire
-        self.time = time
-
-
-class Hit:
-    """Spatial representation of a hit as used in the reconstruction"""
-
-    x = 0.0
-
-    def __init__(self, protoHit, side):
-        self.protoHit = protoHit
-        self.side = side
-
-    @classmethod
-    def fromProtoHit(cls, protoHit):
-        """Returns a list of two hits (left + right) from a single ProtoHit"""
-        return [cls(protoHit, -1), cls(protoHit, 1)]
-
 
 class HitManager:
     """Manages hits stored inside a Pandas dataframe"""

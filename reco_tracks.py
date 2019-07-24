@@ -132,7 +132,7 @@ def process(input_files):
                             col = config.TRACK_COLORS[iR]
                             posx = res[2](posz)
                             figs['sl'][iSL].line(x=posx, y=posz,
-                                                 line_color=col, line_alpha=0.7, line_width=2)
+                                                 line_color=col, line_alpha=0.7, line_width=3)
 
                 if args.plot:
                     # Drawing the left and right hits in global frame
