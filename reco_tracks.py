@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from pdb import set_trace as br
+from operator import itemgetter
 from numpy.polynomial.polynomial import Polynomial
+
 from modules.utils import OUT_CONFIG
 from modules.geometry.hit import HitManager
 from modules.geometry.sl import SL
@@ -11,6 +13,7 @@ from modules.analysis import config as CONFIGURATION
 import os
 import itertools
 import bokeh
+import numpy as np
 
 ############################################# INPUT ARGUMENTS 
 import argparse
@@ -85,7 +88,9 @@ def process(input_files):
                 figs['sl'] = plot.book_chambers_figure(G)
                 figs['global'] = plot.book_global_figure(G, GLOBAL_VIEW_SLs)
                 # Analyzing hits in each SL
+                sl_fit_results = {}
                 for iSL, sl in SLs.items():
+                    # print('- SL', iSL)
                     hits_sl = H.hits.loc[H.hits['sl'] == iSL].sort_values('layer')
                     if args.plot:
                         # Drawing the left and right hits in local frame
@@ -94,10 +99,41 @@ def process(input_files):
                         figs['sl'][iSL].square(x=hits_sl['rposx'], y=hits_sl['posz'], size=5,
                                         fill_color='blue', fill_alpha=0.7, line_width=0)
                     # Performing track reconstruction in the local frame
+                    sl_fit_results[iSL] = []
                     layer_groups = hits_sl.groupby('layer').groups
+                    n_layers = len(layer_groups)
+                    # Stopping if lass than 3 layers of hits
+                    if n_layers < config.NHITS_MIN_LOCAL:
+                        continue
                     hitid_layers = [gr.to_numpy() for gr_name, gr in layer_groups.items()]
-                    # Building the list of hit combinations from all available layers
+                    # Building the list of all possible hit combinations with 1 hit from each layer
                     hits_layered = list(itertools.product(*hitid_layers))
+                    # Building more combinations using only either left or right position of each hit
+                    for hit_ids in hits_layered:
+                        # print('- -', hit_ids)
+                        posz = hits_sl.loc[hits_sl.index.isin(hit_ids), 'posz'].values
+                        posx = hits_sl.loc[hits_sl.index.isin(hit_ids), ['lposx', 'rposx']].values
+                        posx_combs = list(itertools.product(*posx))
+                        # Fitting each combination
+                        fit_range = (min(posz), max(posz))
+                        for iC, posx_comb in enumerate(posx_combs):
+                            pfit, stats = Polynomial.fit(posz, posx_comb, 1, full=True, window=fit_range, domain=fit_range)
+                            chi2 = stats[0][0] / n_layers
+                            if chi2 < config.FIT_CHI2_MAX:
+                                a0, a1 = pfit
+                                sl_fit_results[iSL].append((chi2, hit_ids, pfit))
+                                # print('- - -', iC, chi2)
+                    # Sorting the fit results by Chi2
+                    sl_fit_results[iSL].sort(key=itemgetter(0))
+                    if sl_fit_results[iSL]:
+                        # Drawing fitted tracks
+                        posz = np.array([G.SL_FRAME['b']+1, G.SL_FRAME['t']-1], dtype=np.float32)
+                        for iR, res in enumerate(sl_fit_results[iSL]):
+                            col = config.TRACK_COLORS[iR]
+                            posx = res[2](posz)
+                            figs['sl'][iSL].line(x=posx, y=posz,
+                                                 line_color=col, line_alpha=0.7, line_width=2)
+
                 if args.plot:
                     # Drawing the left and right hits in global frame
                     for view, sls in GLOBAL_VIEW_SLs.items():
@@ -107,6 +143,8 @@ def process(input_files):
                                                     fill_color='red', fill_alpha=0.7, line_width=0)
                         figs['global'][view].square(x=hits_sls['grpos'+view[0]], y=hits_sls['grpos'+view[1]],
                                                     fill_color='blue', fill_alpha=0.7, line_width=0)
+
+
 
                 # Storing the figures to an HTML file
                 if args.plot:

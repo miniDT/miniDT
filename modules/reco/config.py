@@ -26,3 +26,10 @@ SL_ROTATION = {
 
 # Precisions
 DTYPE_COOR = np.float64
+FIT_CHI2_MAX = 2.0
+
+# Colors of fitted tracks
+TRACK_COLORS = ['limegreen', 'darkolivegreen', 'goldenrod', 'peru', 'tomato', 'maroon']
+
+# Fit parameters
+NHITS_MIN_LOCAL = 3
