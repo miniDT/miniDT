@@ -44,7 +44,7 @@ class HitManager:
     def add_hits(self, hits_list):
         """Adds a hit with the given parameters"""
         hits = pd.DataFrame(hits_list, columns=['sl', 'layer', 'wire', 'time']).astype(self.HIT_DTYPES)
-        self.hits = self.hits.append(hits, ignore_index=True)
+        self.hits = self.hits.append(hits, ignore_index=True, sort=False)
 
     def reset(self):
         """Removes all hits from the dataframe"""

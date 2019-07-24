@@ -20,19 +20,62 @@ class Geometry:
         """Loads geometry configuration"""
         self.NCHANNELS = config.NCHANNELS
         self.NLAYERS = config.NLAYERS
+        self.NWIRES = int(config.NCHANNELS / config.NLAYERS)
         self.SL_FPGA_CHANNELS = config.SL_FPGA_CHANNELS
+        self.SLS = tuple(self.SL_FPGA_CHANNELS.keys())
         self.XCELL = config.XCELL
         self.ZCELL = config.ZCELL
         self.TDRIFT = config.TDRIFT
         self.VDRIFT = self.XCELL*0.5 / self.TDRIFT
         self.GEO_CONDITIONS = config.GEO_CONDITIONS
+        # Calculating local geometry properties
+        self.WIRE_POSITIONS = self.wire_positions()
+        self.CELL_BORDERS = self.cell_borders()
+        self.SL_FRAME = self.sl_frame()
+
+
+    def cell_borders(self):
+        """Returns arrays of cell border positions for each layer"""
+        borders = {}
+        for l in range(1, self.NLAYERS+1):
+            b = {}
+            b['l'] = self.WIRE_POSITIONS[l]['x'] - 0.5 * self.XCELL
+            b['r'] = self.WIRE_POSITIONS[l]['x'] + 0.5 * self.XCELL
+            b['b'] = self.WIRE_POSITIONS[l]['z'] - 0.5*self.ZCELL
+            b['t'] = self.WIRE_POSITIONS[l]['z'] + 0.5*self.ZCELL
+            borders[l] = b
+        return borders
+
+
+    def wire_positions(self):
+        """Returns arrays of x and y positions of all wires for each layer"""
+        wires = np.arange(1, self.NWIRES+1, dtype=np.int8)
+        pos = {}
+        for l in range(1, self.NLAYERS+1):
+            p = {}
+            p['x'] = (wires - self.GEO_CONDITIONS['origin_wire']).astype(DTYPE_COOR) * self.XCELL + self.GEO_CONDITIONS['layer_shiftx'][l-1]
+            p['z'] = np.array([self.GEO_CONDITIONS['layer_posz'][l-1]]*self.NWIRES, dtype=DTYPE_COOR)
+            pos[l] = p
+        return pos
+
+    def sl_frame(self):
+        """Returns local coordinates of a superlayer"""
+        pos = {
+            'l': np.min([b['l'] for b in self.CELL_BORDERS.values()]),
+            'r': np.max([b['r'] for b in self.CELL_BORDERS.values()]),
+            'b': np.min([b['b'] for b in self.CELL_BORDERS.values()]),
+            't': np.max([b['t'] for b in self.CELL_BORDERS.values()]),
+        }
+        return pos
+
+
 
     def fill_hits_geometry(self, hits):
         """Fills the dataframe of input hits with calculated geometry information"""
         # Setting superlayer numbers
         hits_chfpga = []
         for sl, (fpga, ch_range) in self.SL_FPGA_CHANNELS.items():
-            hits_chfpga.append((hits['FPGA'] == fpga) & (hits['TDC_CHANNEL'] >= ch_range[0]) & (hits['TDC_CHANNEL'] <= ch_range[1]))
+            hits_chfpga.append((hits['FPGA'] == fpga) & (hits['TDC_CHANNEL'] >= ch_range[0]) & (hits['TDC_CHANNEL'] <= ch_range[1]), sort=False)
         hits['SL'] = np.select(hits_chfpga, [0, 1, 2, 3], default=-1).astype(np.int8)
         # Setting layer numbers
         hits_chrem  = [
@@ -54,10 +97,11 @@ class Geometry:
             (hits['LAYER'] == 3),
             (hits['LAYER'] == 4),
         ]
-        hits['Z_POS_WIRE'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(np.float64)
-        hits['X_POS_WIRE'] = (hits['WIRE_NUM'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(np.float64) * self.XCELL
-        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(np.float64)
+        hits['Z_POS_WIRE'] = np.select(hits_layer, self.GEO_CONDITIONS['layer_posz'], default=0).astype(DTYPE_COOR)
+        hits['X_POS_WIRE'] = (hits['WIRE_NUM'].astype(np.int8) - self.GEO_CONDITIONS['origin_wire']).astype(DTYPE_COOR) * self.XCELL
+        hits['X_POS_WIRE'] = hits['X_POS_WIRE'] + np.select(hits_layer, self.GEO_CONDITIONS['layer_shiftx'], default=0).astype(DTYPE_COOR)
         hits.loc[~sel_phys, ['TDC_CHANNEL_NORM', 'WIRE_NUM', 'LAYER', 'X_POS_WIRE', 'Z_POS_WIRE']] = [0, 0, 0, 0.0, 0.0]
+
 
     def fill_hits_position(self, hits, reco=False):
         """Fills the dataframe of input hits with calculated position values"""
