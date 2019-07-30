@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(description='Track reconstruction from input hi
 parser.add_argument('-E', '--events', metavar='N',  help='Events to process', type=int, default=None, nargs='+')
 parser.add_argument('-f', '--format',  help='Input hits format', default='time_wire')
 parser.add_argument('-g', '--glance',  help='Only show # hits in each event', action='store_true', default=False)
-parser.add_argument('-o', '--output',  help='Output path', action='store_true', default='plots/hits_ev{0:d}.html')
+parser.add_argument('-o', '--output',  help='Output path', default='plots/hits_ev{0:d}.html')
 parser.add_argument('-p', '--plot',  help='Draw plots', action='store_true', default=False)
 parser.add_argument('inputs', metavar='FILE', help='Input files with raw hits, 1 event/line', nargs='+')
 
@@ -128,7 +128,7 @@ def process(input_files):
                     if sl_fit_results[iSL]:
                         # Drawing fitted tracks
                         posz = np.array([G.SL_FRAME['b']+1, G.SL_FRAME['t']-1], dtype=np.float32)
-                        for iR, res in enumerate(sl_fit_results[iSL]):
+                        for iR, res in enumerate(sl_fit_results[iSL][:5]):
                             col = config.TRACK_COLORS[iR]
                             posx = res[2](posz)
                             figs['sl'][iSL].line(x=posx, y=posz,

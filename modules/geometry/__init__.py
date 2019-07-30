@@ -75,7 +75,7 @@ class Geometry:
         # Setting superlayer numbers
         hits_chfpga = []
         for sl, (fpga, ch_range) in self.SL_FPGA_CHANNELS.items():
-            hits_chfpga.append((hits['FPGA'] == fpga) & (hits['TDC_CHANNEL'] >= ch_range[0]) & (hits['TDC_CHANNEL'] <= ch_range[1]), sort=False)
+            hits_chfpga.append((hits['FPGA'] == fpga) & (hits['TDC_CHANNEL'] >= ch_range[0]) & (hits['TDC_CHANNEL'] <= ch_range[1]))
         hits['SL'] = np.select(hits_chfpga, [0, 1, 2, 3], default=-1).astype(np.int8)
         # Setting layer numbers
         hits_chrem  = [
