@@ -82,6 +82,8 @@ def process(input_files):
                     ww = words[start:start+n_words_hit]
                     hits_lst.append([int(ww[0]), int(ww[1]), int(ww[2]), float(ww[3])])
                 H.add_hits(hits_lst)
+                # Removing hits with time outside the timebox region
+                H.hits.drop(H.hits.loc[(H.hits['time'] < config.TIMEBOX[0]) | (H.hits['time'] > config.TIMEBOX[1])].index, inplace=True)
                 # Calculating local+global hit positions
                 H.calc_pos(SLs)
                 # Creating figures of the chambers

@@ -24,6 +24,9 @@ SL_ROTATION = {
     3: (0,        0,     0.5*pi)
 }
 
+# Selection of hits to use for the fits
+TIMEBOX = (-5, 380)
+
 # Precisions
 DTYPE_COOR = np.float64
 FIT_CHI2_MAX = 2.0
