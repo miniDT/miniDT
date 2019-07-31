@@ -6,7 +6,8 @@ from numpy.polynomial.polynomial import Polynomial
 from modules.utils import OUT_CONFIG
 from modules.geometry.hit import HitManager
 from modules.geometry.sl import SL
-from modules.geometry import Geometry
+from modules.geometry.segment import Segment
+from modules.geometry import Geometry, COOR_ID
 from modules.reco import config, plot
 from modules.analysis import config as CONFIGURATION
 
@@ -115,15 +116,19 @@ def process(input_files):
                         posx = hits_sl.loc[hits_sl.index.isin(hit_ids), ['lposx', 'rposx']].values
                         posx_combs = list(itertools.product(*posx))
                         # Fitting each combination
+                        fit_results_lr = []
                         fit_range = (min(posz), max(posz))
                         for iC, posx_comb in enumerate(posx_combs):
                             pfit, stats = Polynomial.fit(posz, posx_comb, 1, full=True, window=fit_range, domain=fit_range)
                             chi2 = stats[0][0] / n_layers
                             if chi2 < config.FIT_CHI2_MAX:
                                 a0, a1 = pfit
-                                sl_fit_results[iSL].append((chi2, hit_ids, pfit))
-                                # print('- - -', iC, chi2)
-                    # Sorting the fit results by Chi2
+                                fit_results_lr.append((chi2, hit_ids, pfit))
+                        # Keeping only the best fit result from the given set of physical hits
+                        fit_results_lr.sort(key=itemgetter(0))
+                        if fit_results_lr:
+                            sl_fit_results[iSL].append(fit_results_lr[0])
+                    # Sorting the fit results of a SL by Chi2
                     sl_fit_results[iSL].sort(key=itemgetter(0))
                     if sl_fit_results[iSL]:
                         # Drawing fitted tracks
@@ -143,6 +148,31 @@ def process(input_files):
                                                     fill_color='red', fill_alpha=0.7, line_width=0)
                         figs['global'][view].square(x=hits_sls['grpos'+view[0]], y=hits_sls['grpos'+view[1]],
                                                     fill_color='blue', fill_alpha=0.7, line_width=0)
+                        # Building 3D segments from the fit results in each SL
+                        posz = np.array([G.SL_FRAME['b'], G.SL_FRAME['t']], dtype=np.float32)
+                        for sl in sls:
+                            for iR, res in enumerate(sl_fit_results[sl.id][:5]):
+                                posx = res[2](posz)
+                                start = (posx[0], 0, posz[0])
+                                end = (posx[1], 0, posz[1])
+                                segL = Segment(start, end)
+                                segG = segL.fromSL(sl)
+                                segG.calc_vector()
+                                # Extending the global segment to the full height of the view
+                                start = segG.pointAtZ(plot.PLOT_RANGE['y'][0])
+                                end = segG.pointAtZ(plot.PLOT_RANGE['y'][1])
+                                # Getting XY coordinates of the global segment for the current view
+                                iX = COOR_ID[view[0]]
+                                posx = [start[iX], end[iX]]
+                                posy = [start[2], end[2]]
+                                # Drawing the segment
+                                col = config.TRACK_COLORS[sl.id]
+                                figs['global'][view].line(x=posx, y=posy,
+                                                     line_color=col, line_alpha=0.7, line_width=3)
+                                print(sl.id, iR, posx, posy)
+
+
+
 
 
 

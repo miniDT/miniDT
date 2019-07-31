@@ -6,6 +6,7 @@ from sympy.vector import CoordSys3D
 
 
 DTYPE_COOR = np.float32
+COOR_ID = {'x': 0, 'y': 1, 'z': 2}
 
 
 class Geometry:

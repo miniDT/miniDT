@@ -6,6 +6,8 @@ from modules.geometry import DTYPE_COOR
 
 import numpy as np
 
+PLOT_RANGE = {'x': (0, 800), 'y': (0, 1000)}
+
 def book_chambers_figure(geo):
     """Book figures for plotting the hits inside chambers"""
     figs = {}
@@ -37,12 +39,12 @@ def book_global_figure(geo, sls):
     """Book figures for plotting global hit positions in two orthogonal planes"""
     figs = {}
     figs['xz'] = figure(plot_width=1250, plot_height=1300,
-                        x_range=(0, 800), y_range=(0, 800),
+                        x_range=PLOT_RANGE['x'], y_range=PLOT_RANGE['y'],
                         title="Global XZ",
                         x_axis_label='x (mm)',
                         y_axis_label='z (mm)')
     figs['yz'] = figure(plot_width=1250, plot_height=1300,
-                        x_range=(0, 800), y_range=(0, 800),
+                        x_range=PLOT_RANGE['x'], y_range=PLOT_RANGE['y'],
                         title="Global YZ",
                         x_axis_label='y (mm)',
                         y_axis_label='z (mm)')
