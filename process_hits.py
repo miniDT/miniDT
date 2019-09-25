@@ -242,7 +242,7 @@ def save_hits(df_all, df_events, output_path, format='time_wire'):
             ch_sel = (df['TDC_CHANNEL_NORM'] > 0)
             nhits = df.loc[ch_sel].shape[0]
             # Merging all hits in one line
-            line = OUT_CONFIG['event']['format'].format(event, nhits) 
+            line = OUT_CONFIG['event']['format'].format(df['ORBIT_CNT'].iloc[0], nhits) 
             if nhits > 0:
                 line += ' ' + ' '.join([OUT_CONFIG[format]['format'].format(*values)
                                        for values in df.loc[ch_sel, OUT_CONFIG[format]['fields']].values])

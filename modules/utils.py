@@ -24,7 +24,7 @@ OUT_CONFIG = {
     },
     'event': {
         'format': '{0:d} {1:d}',
-        'fields': ['EVENT_NR', 'NHITS'],
+        'fields': ['ORBIT', 'NHITS'],
     }
 }
 
