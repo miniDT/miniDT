@@ -631,7 +631,8 @@ def process(input_files):
     # Matching triplets from same event
     if args.meantimer:
         # FIXME: This is not going to work due to the changed format of the function input
-        sync_triplets(allhits, df_events)
+        # sync_triplets(allhits, df_events)
+        print('WARNING: Triplet search is disabled in the code')
     
     print('### Writing output')
 

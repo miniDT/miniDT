@@ -22,11 +22,12 @@ One of the following methods for event search can be used:
    * using raw external trigger:  
      `./offline_analysis.py -e <formats> <list of input TXT files>`
    * using raw external trigger, with `t0` determined by meantimer (for avoiding jitter of the external trigger):  
-     `./offline_analysis.py -emua <formats> <list of input TXT files>`
+     `./offline_analysis.py -ea <formats> <list of input TXT files>`
    * using meantimer to find aligned hits in each orbit (external trigger not used at all):  
-     `./offline_analysis.py -mua <formats> <list of input TXT files>`
+     `./offline_analysis.py -a <formats> <list of input TXT files>`
   
-  Available format options are the ones starting with `--hits_*` in the help message
+  Available format options are the ones starting with `--hits_*` in the help message  
+  Use `-s <suffix>` to add different suffixes to the output text files depending on the used event search method
 
 - - - - -
 
