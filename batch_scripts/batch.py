@@ -6,7 +6,7 @@ import os
 import subprocess
 import glob
 import argparse
-from packages.utils import chunks
+from modules.utils import chunks
 
 
 if __name__ == '__main__':

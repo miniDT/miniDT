@@ -2,7 +2,6 @@
 
 import numpy as np
 from pdb import set_trace as br
-from sympy.vector import CoordSys3D
 
 
 DTYPE_COOR = np.float32

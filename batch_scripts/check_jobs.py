@@ -7,7 +7,7 @@ import glob
 import fnmatch
 import subprocess
 
-from packages.utils import print_progress, chunks
+from modules.utils import print_progress, chunks
 from pdb import set_trace as br
 
 STATUSES = {
@@ -42,22 +42,22 @@ def check_job(folder):
         return 4
     log_job = os.path.join(folder, 'out.log')
     if subprocess.call(['grep', 'Job terminated', log_job], stdout=FNULL, stderr=subprocess.STDOUT) == 0:
-	# Checking the job output file
-    	file_job = os.path.join(folder, 'out.txt')
-    	if os.path.isfile(file_job):
-    	    if subprocess.call(['grep', '-E', '^\+ Done', file_job], stdout=FNULL, stderr=subprocess.STDOUT) == 0:
-    	        return 5
-    	    # Getting the exit code from the job log file
-    	    try:
-		result = subprocess.check_output(['grep', '-E', '^Finished running:', file_job])
-		exit_code = int(result.split()[-1])
-		return (3, exit_code)
-	    except:
-		return 4 
-    elif subprocess.call(['grep', 'wall time', log_job], stdout=FNULL, stderr=subprocess.STDOUT) == 0:
-	return 6
+    # Checking the job output file
+        file_job = os.path.join(folder, 'out.txt')
+        if os.path.isfile(file_job):
+            if subprocess.call(['grep', '-E', '^\+ Done', file_job], stdout=FNULL, stderr=subprocess.STDOUT) == 0:
+                return 5
+            # Getting the exit code from the job log file
+            try:
+                result = subprocess.check_output(['grep', '-E', '^Finished running:', file_job])
+                exit_code = int(result.split()[-1])
+                return (3, exit_code)
+            except:
+                return 4 
+        elif subprocess.call(['grep', 'wall time', log_job], stdout=FNULL, stderr=subprocess.STDOUT) == 0:
+            return 6
 
-    return 0
+    return 0    
 
 def check_jobs(input_folder='BATCH'):
     """Checks all jobs found in the input folder or deeper"""
@@ -66,11 +66,11 @@ def check_jobs(input_folder='BATCH'):
     # Finding all input folders
     print('### Walking through subfolders of: {0:s}'.format(input_folder))
     for root, dirnames, filenames in os.walk(input_folder, topdown=True):
-	# Skipping folders with split job output
+    # Skipping folders with split job output
         if os.path.split(root)[-1] in ['DONE', 'FAILED', 'OUTPUT']:
-	    dirnames[:] = []
+            dirnames[:] = []
             continue
-	# Checking each job
+        # Checking each job
         for dirname in fnmatch.filter(dirnames, 'job_*'):
             folder = os.path.normpath(os.path.join(root, dirname))
             folders.append(folder)
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('path', metavar='PATH', help='folder where jobs were created', nargs='?', default="BATCH")
     parser.add_argument('-c', '--clean', help='clean folders of failed jobs for resubmission', action='store_true', default=False)
     parser.add_argument('-q', '--queue', metavar='QUEUE', help='Resubmission queue: espresso, microcentury, longlunch, workday, tomorrow, testmatch, nextweek', 
-			action='store', default='microcentury')
+            action='store', default='microcentury')
     parser.add_argument('-r', '--resubmit', help='resubmit runs with all jobs in SETUP state', action='store_true', default=False)
     parser.add_argument('-s', '--separate', help='separate jobs that are done/failed into different subfolders', action='store_true', default=False)
     parser.add_argument('-v', '--verbose', help='show status of each job', action='store_true', default=False)
@@ -110,17 +110,17 @@ if __name__ == '__main__':
     # Grouping folders by runs
     root_dir = None
     folders = {}
-    for path in statuses.iterkeys():
+    for path in statuses.keys():
         parent = os.path.dirname(path)
         folder = os.path.basename(path)
         if parent not in folders:
             folders[parent] = []
         folders[parent].append(folder)
     # Sorting folders for each run
-    for run in folders.iterkeys():
+    for run in folders.keys():
         root_dir = os.path.dirname(run)
         folders[run].sort()
-    for run in sorted(folders.iterkeys()):
+    for run in sorted(folders.keys()):
         run_statuses = {}
         for job in folders[run]:
             path = os.path.join(run, job)
@@ -130,21 +130,21 @@ if __name__ == '__main__':
             run_statuses[status].append(job)
         print(run)
         run_name = os.path.basename(run)
-	# Resubmitting jobs
-	if args.resubmit:
-	    # Resubmitting only runs that have all jobs in SETUP state
-	    if run_statuses.keys() != [-1]:
-		continue
-	    # Resubmitting all jobs of the run
-	    runName = os.path.split(run)[-1]
-	    cmd = 'condor_submit condor_config.sub subDir=$PWD -append "+JobFlavour={0:s}" -batch-name {1:s} -queue jobDir matching dirs {2:s}/*'.format(args.queue, runName, run)
-	    if subprocess.call(cmd, shell=True) == 0:
-		print('Resubmitted run: {0:s}'.format(run))
-	    else:
-		print('WARNING: Failed to resubmit run: {0:s}'.format(run))
-	    print('- - - - - - - - - - - - - -')
-	    continue
-        for status, jobs in run_statuses.iteritems():
+        # Resubmitting jobs
+        if args.resubmit:
+            # Resubmitting only runs that have all jobs in SETUP state
+            if run_statuses.keys() != [-1]:
+                continue
+            # Resubmitting all jobs of the run
+            runName = os.path.split(run)[-1]
+            cmd = 'condor_submit condor_config.sub subDir=$PWD -append "+JobFlavour={0:s}" -batch-name {1:s} -queue jobDir matching dirs {2:s}/*'.format(args.queue, runName, run)
+            if subprocess.call(cmd, shell=True) == 0:
+                print('Resubmitted run: {0:s}'.format(run))
+            else:
+                print('WARNING: Failed to resubmit run: {0:s}'.format(run))
+                print('- - - - - - - - - - - - - -')
+                continue
+        for status, jobs in run_statuses.items():
             print('   {0:s}  x  {1:d} jobs'.format(status_str(status), len(jobs)))
             if args.verbose:
                 print('      '+' '.join(jobs))
@@ -185,7 +185,7 @@ if __name__ == '__main__':
                     subprocess.call(command)
                     print('        Moved {0:d} jobs to {1:s}'.format(n_moved, out_dir_run))
 
-        print('- - - - - - - -')
+            print('- - - - - - - -')
     # Cleaning up folders with failed jobs
     if args.clean:
         to_clean = ['out.log', 'err.txt', 'out.txt', 'log.txt', 'core.*', 'exitStatus.txt']

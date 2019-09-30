@@ -48,3 +48,7 @@ def chunks(l, n):
 def mem():
     """Get memory used by the process"""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+def chunks(l, n):
+    """Splits a list into evenly sized chunks"""
+    return [l[i:i+n] for i in range(0, len(l), n)]
