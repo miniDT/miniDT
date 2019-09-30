@@ -1,0 +1,10 @@
+executable = batchScript.sh
+arguments = $(subDir) $(jobDir)
+requirements = (OpSysAndVer =?= "SLCern6")
+output = $(jobDir)/out.txt
+error = $(jobDir)/err.txt
+log = $(jobDir)/out.log
+should_transfer_files = NO
+max_retries             = 3
+requirements = Machine =!= LastRemoteHost
++MaxRuntime = 28800
