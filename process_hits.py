@@ -143,8 +143,8 @@ def calc_event_numbers(allhits, runnum, trigger_v1=False):
         # Getting time and orbit number of the event after duplicates were eliminated
         time_event, orbit_event = None, None
         if trigger_v1:
-            time_event = df.iloc[0]['TDC_MEAS']
             orbit_event = df.iloc[0]['ORBIT_CNT']
+            time_event = orbit_event*DURATION['orbit'] + df.iloc[0]['TDC_MEAS']*DURATION['bx']
         else:
             for ch in channels_trigger:
                 if ch in df.index:
@@ -243,12 +243,14 @@ def save_hits(df_all, df_events, output_path, format='time_wire'):
     sel = df_all['TDC_CHANNEL_NORM'] <= NCHANNELS
     for ch in CHANNELS_VIRTUAL:
         sel = sel | ((df_all['FPGA'] == ch[0]) & (df_all['TDC_CHANNEL'] == ch[1]))
+        # Adding HEAD=3 hits for the new trigger format
+        sel = sel | ( (df_all['HEAD'] == 3) & (df_all['TDC_MEAS'] != 4095) )
     events = df_all[sel].groupby('EVENT_NR')
     print('### Writing hits in {0:d} events to file: {1:s}'.format(len(events), output_path))
     with open(output_path, 'w') as outfile:
         outfile.write('# {0:s} [HIT1 HIT2 ... HITN]  |  HITN: '.format(' '.join(OUT_CONFIG['event']['fields']))+' '.join(OUT_CONFIG[format]['fields'])+'\n')
         for event, df in events:
-            ch_sel = (df['TDC_CHANNEL_NORM'] > 0)
+            ch_sel = (df['TDC_CHANNEL_NORM'] > 0) & (df['HEAD'] < 3)
             nhits = df.loc[ch_sel].shape[0]
             # Merging all hits in one line
             line = OUT_CONFIG['event']['format'].format(df['ORBIT_CNT'].iloc[0], nhits)
@@ -275,8 +277,6 @@ def read_data(input_files, runnum):
             skipLines = range(1,131072)
         column_names = ['HEAD','FPGA','TDC_CHANNEL','ORBIT_CNT','BX_COUNTER','TDC_MEAS','TRG_QUALITY']
         df = pd.read_csv(file, nrows=args.number, skiprows=skipLines, engine='c', names=column_names)
-        # Removing possible incomplete rows e.g. last line of last file
-        df.dropna(inplace=True)
         # Converting to memory-optimised data types
         for name in ['HEAD', 'FPGA', 'TDC_CHANNEL']:
             df[name] = df[name].astype(np.uint8)
@@ -286,6 +286,8 @@ def read_data(input_files, runnum):
             df[name] = df[name].astype(np.uint16)
         for name in ['ORBIT_CNT']:
             df[name] = df[name].astype(np.uint32)
+        # Removing possible incomplete rows e.g. last line of last file
+        df.dropna(inplace=True)
         hits.append(df)
     allhits = pd.concat(hits, ignore_index=True, copy=False)
     df_events = None
