@@ -16,12 +16,13 @@ import itertools
 import bokeh
 import numpy as np
 
-############################################# INPUT ARGUMENTS 
+############################################# INPUT ARGUMENTS
 import argparse
 parser = argparse.ArgumentParser(description='Track reconstruction from input hits.')
 parser.add_argument('-E', '--events', metavar='N',  help='Events to process', type=int, default=None, nargs='+')
 parser.add_argument('-f', '--format',  help='Input hits format', default='time_wire')
 parser.add_argument('-g', '--glance',  help='Only show # hits in each event', action='store_true', default=False)
+parser.add_argument('-m', '--max_hits',  dest='max_hits', type=int, help='Maximum number of hits allowed in one event [default: 15]', action='store', default=15)
 parser.add_argument('-o', '--output',  help='Output path', default='plots/hits_ev{0:d}.html')
 parser.add_argument('-p', '--plot',  help='Draw plots', action='store_true', default=False)
 parser.add_argument('inputs', metavar='FILE', help='Input files with raw hits, 1 event/line', nargs='+')
@@ -75,6 +76,9 @@ def process(input_files):
                 nhits = int(words[1])
                 print('Event {0:<5d}  # hits: {1:d}'.format(event, nhits))
                 if args.glance:
+                    continue
+                # Skipping event with too many hits (most likely a spark event that will take forever to process)
+                if nhits > args.max_hits:
                     continue
                 # Extracting hit information
                 for iHit in range(nhits):
