@@ -4,8 +4,6 @@ import numpy as np
 import math
 from math import cos, sin
 from pdb import set_trace as br
-from sympy import Point3D, Line3D, Plane, symbols
-from sympy.vector import CoordSys3D, Vector
 from modules.geometry import DTYPE_COOR
 
 class SL:
